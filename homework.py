@@ -1,8 +1,8 @@
 import logging
 import sys
 import time
+from datetime import datetime as dt
 from http import HTTPStatus
-from typing import Any
 
 import requests
 import telegram
@@ -29,14 +29,22 @@ logging.basicConfig(
     encoding='utf8'
 )
 
-logger = logging.getLogger(__name__)
-formatter = logging.Formatter(
-    '%(asctime)s, %(levelname)s, %(message)s'
-)
-stream_handler = logging.StreamHandler(stream=sys.stdout)
-stream_handler.setLevel(logging.DEBUG)
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
+
+def init_logger(
+    name: str = __name__,
+    handler: logging.Handler = logging.StreamHandler(stream=sys.stdout),
+    level: int = logging.DEBUG,
+    format: str = '%(asctime)s, %(name)s, %(levelname)s, %(message)s'
+) -> logging.Logger:
+    """Инициализация экземпляра логгера."""
+    logger = logging.getLogger(name)
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter(format))
+    logger.addHandler(handler)
+    return logger
+
+
+logger = init_logger(format='%(asctime)s, %(levelname)s, %(message)s')
 
 
 def check_tokens() -> bool:
@@ -60,10 +68,10 @@ def send_message(bot: telegram.Bot, message: str) -> None:
         raise BotException(error_msg)
 
 
-def get_api_answer(timestamp: int) -> Any:
+def get_api_answer(timestamp: int) -> dict:
     """Запрос к единственному эндпоинту API-сервиса."""
     try:
-        response = homework_statuses = requests.get(
+        response = requests.get(
             url=settings.ENDPOINT,
             headers=settings.HEADERS,
             params={'from_date': timestamp}
@@ -74,13 +82,13 @@ def get_api_answer(timestamp: int) -> Any:
 
     if response.status_code != HTTPStatus.OK:
         error_msg = (
-            f'Отрицательный ответ API-сервиса: {homework_statuses.status_code}'
+            f'Отрицательный ответ API-сервиса: {response.status_code}'
         )
         logger.error(error_msg)
         raise BotAPIException(error_msg)
 
     try:
-        homework_statuses = homework_statuses.json()
+        homework_statuses = response.json()
         logger.info('Получен ответ API-сервиса')
         return homework_statuses
     except InvalidJSONError as error:
@@ -93,7 +101,7 @@ def get_api_answer(timestamp: int) -> Any:
         raise BotException(error_msg)
 
 
-def check_response(response: Any) -> Any:
+def check_response(response: dict) -> dict:
     """Проверяет ответ API на соответствие документации."""
     if not isinstance(response, dict):
         error_msg = 'Словарь не получен'
@@ -121,16 +129,12 @@ def check_response(response: Any) -> Any:
         raise BotException(error_msg)
 
 
-def parse_status(homework: dict[Any, Any]) -> str:
+def parse_status(homework: dict) -> str:
     """Извлекает из информации о конкретной домашней работе статус."""
     try:
         homework_name = homework['homework_name']
     except KeyError as error:
         error_msg = f'Ошибка определения статуса: {error}'
-        logger.error(error_msg)
-        raise BotException(error_msg)
-    except Exception as error:
-        error_msg = f'Сбой работы программы: {error}'
         logger.error(error_msg)
         raise BotException(error_msg)
     status = homework.get('status')
@@ -139,7 +143,6 @@ def parse_status(homework: dict[Any, Any]) -> str:
         error_msg = f'Неожиданный статус: {status}'
         logger.error(error_msg)
         raise BotException(error_msg)
-
     logger.debug(f'Статус работы "{homework_name}": {verdict}')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -154,11 +157,9 @@ def main() -> None:
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     if settings.BOT_DEBUG:
         timestamp = int(
-            time.mktime(
-                time.strptime(
-                    '08.02.2023', '%d.%m.%Y'  # Старт проверок при отладке
-                )
-            )
+            dt.strptime(
+                '08.02.2023', '%d.%m.%Y'  # Старт проверок при отладке
+            ).timestamp()
         )
     else:
         timestamp = int(time.time())
@@ -171,14 +172,9 @@ def main() -> None:
             homework = check_response(response=response)
             status = parse_status(homework=homework)
             if status != prev_status:
-                try:
-                    send_message(bot, status)
-                except Exception as error:
-                    error_msg = f'Сбой в работе программы: {error}'
-                    logger.error(error_msg)
-                else:
-                    prev_status = status
-                    timestamp = response.get('current_date', timestamp)
+                send_message(bot, status)
+                prev_status = status
+                timestamp = response.get('current_date', timestamp)
             else:
                 logger.debug('Статус проверки работы не изменился')
 
