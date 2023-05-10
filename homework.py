@@ -119,20 +119,6 @@ def check_response(response: dict) -> dict:
 
     return response['homeworks']
 
-    # try:
-    #     return response['homeworks'][0]
-    # except IndexError as error:
-    #     if error == 'list index out of range':
-    #         error_msg = 'Новых домашних заданий нет'
-    #     else:
-    #         error_msg = f'Ошибка индекса домашней работы: {error}'
-    #     logger.error(error_msg)
-    #     raise BotException(error_msg)
-    # except Exception as error:
-    #     error_msg = f'Сбой работы программы: {error}'
-    #     logger.error(error_msg)
-    #     raise BotException(error_msg)
-
 
 def parse_status(homework: dict) -> str:
     """Извлекает из информации о конкретной домашней работе статус."""
