@@ -117,16 +117,21 @@ def check_response(response: dict) -> dict:
         raise TypeError(error_msg)
     logger.debug('ответ API соответствует документации')
 
-    try:
-        return response['homeworks'][0]
-    except IndexError as error:
-        error_msg = f'Ошибка индекса домашней работы: {error}'
-        logger.error(error_msg)
-        raise BotException(error_msg)
-    except Exception as error:
-        error_msg = f'Сбой работы программы: {error}'
-        logger.error(error_msg)
-        raise BotException(error_msg)
+    return response['homeworks']
+
+    # try:
+    #     return response['homeworks'][0]
+    # except IndexError as error:
+    #     if error == 'list index out of range':
+    #         error_msg = 'Новых домашних заданий нет'
+    #     else:
+    #         error_msg = f'Ошибка индекса домашней работы: {error}'
+    #     logger.error(error_msg)
+    #     raise BotException(error_msg)
+    # except Exception as error:
+    #     error_msg = f'Сбой работы программы: {error}'
+    #     logger.error(error_msg)
+    #     raise BotException(error_msg)
 
 
 def parse_status(homework: dict) -> str:
@@ -158,7 +163,7 @@ def main() -> None:
     if settings.BOT_DEBUG:
         timestamp = int(
             dt.strptime(
-                '08.02.2023', '%d.%m.%Y'  # Старт проверок при отладке
+                '08.03.2023', '%d.%m.%Y'  # Старт проверок при отладке
             ).timestamp()
         )
     else:
@@ -170,7 +175,10 @@ def main() -> None:
         try:
             response = get_api_answer(timestamp=timestamp)
             homework = check_response(response=response)
-            status = parse_status(homework=homework)
+            if len(homework) == 0:
+                status = 'Новых выполненных домашних работ нет'
+            else:
+                status = parse_status(homework=homework[0])
             if status != prev_status:
                 send_message(bot, status)
                 prev_status = status
